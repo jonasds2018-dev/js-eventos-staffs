@@ -5,7 +5,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>JS EVENTOS E STAFFS</title>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <style>
 *{box-sizing:border-box}
 body{margin:0;padding:18px;background:#101827;color:white;font-family:Arial,sans-serif}
@@ -16,14 +18,14 @@ input,select,button{width:100%;padding:13px;margin:6px 0;border-radius:8px;font-
 input,select{background:#101827;color:white;border:1px solid #40516a}
 button{background:#16a765;color:white;border:0;font-weight:bold}
 button.secondary{background:#40516a}
-button.danger{background:#a43c48}
-small{color:#b9c7d8}
+.hidden{display:none}
 .person{background:#263650;padding:12px;border-radius:9px;margin-top:10px}
 .status{font-weight:bold;color:#38d987}
-.hidden{display:none}
 </style>
 </head>
+
 <body>
+
 <header>
 <h1>JS EVENTOS E STAFFS</h1>
 <p>Gestão de funcionários e convocações</p>
@@ -33,11 +35,12 @@ small{color:#b9c7d8}
 <h2>Login do administrador</h2>
 <input id="email" type="email" placeholder="Seu e-mail">
 <input id="senha" type="password" placeholder="Sua senha">
-<button onclick="entrar()">ENTRAR</button>
+<button id="botaoEntrar" onclick="entrar()">ENTRAR</button>
 <p id="mensagem"></p>
 </section>
 
 <main id="painel" class="hidden">
+
 <section class="card">
 <p id="usuarioLogado"></p>
 <button class="secondary" onclick="sair()">SAIR</button>
@@ -72,39 +75,62 @@ small{color:#b9c7d8}
 <input id="busca" placeholder="Buscar pelo nome..." oninput="mostrarFuncionarios()">
 <div id="lista"></div>
 </section>
+
 </main>
 
 <script>
-const SUPABASE_URL = "sb_publishable_NppSt7THR4AEsFsMZRSAEg_o2mjEUMP";
-const SUPABASE_KEY = "https://fabgvrrnqqgvboaxdaoc.supabase.co/rest/v1/";
+
+// CONFIGURAÇÃO DO SUPABASE
+const SUPABASE_URL = "https://fabgvrrnqqgvboaxdaoc.supabase.co";
+const SUPABASE_KEY = "sb_publishable_NppSt7THR4AEsFsMZRSAEg_o2mjEUMP";
 
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 let funcionarios = [];
 let eventos = [];
 let convocacoes = [];
 
-function mensagem(id, texto){document.getElementById(id).textContent=texto;}
+function mensagem(id,texto){
+ document.getElementById(id).textContent=texto;
+}
 
+// LOGIN
 async function entrar(){
  const email=document.getElementById("email").value.trim();
  const password=document.getElementById("senha").value;
- mensagem("mensagem","Entrando...");
- const {error}=await db.auth.signInWithPassword({email,password});
- if(error){mensagem("mensagem","Não foi possível entrar: "+error.message);return;}
- await iniciarPainel();
+ const botao=document.getElementById("botaoEntrar");
+
+ if(!email||!password){
+  mensagem("mensagem","Informe seu e-mail e sua senha.");
+  return;
+ }
+
+ botao.disabled=true;
+ botao.textContent="ENTRANDO...";
+ mensagem("mensagem","Conectando ao sistema...");
+
+ try{
+  const {error}=await db.auth.signInWithPassword({email,password});
+
+  if(error) throw error;
+
+  await iniciarPainel();
+
+ }catch(error){
+  mensagem("mensagem","Não foi possível entrar: "+error.message);
+ }finally{
+  botao.disabled=false;
+  botao.textContent="ENTRAR";
+ }
 }
 
-
+// ABRIR PAINEL
 async function iniciarPainel(){
- try {
+ try{
   const {data:{user},error:userError}=await db.auth.getUser();
 
   if(userError) throw userError;
-
-  if(!user){
-   mensagem("mensagem","Usuário não autenticado.");
-   return;
-  }
+  if(!user) throw new Error("Usuário não autenticado.");
 
   const {error}=await db.from("funcionarios").select("id").limit(1);
 
@@ -117,138 +143,213 @@ async function iniciarPainel(){
 
   await carregarDados();
 
- } catch(error) {
+ }catch(error){
   console.error("Erro ao abrir painel:",error);
   mensagem("mensagem","Erro ao abrir painel: "+error.message);
  }
 }
- {
- const {data:{user}}=await db.auth.getUser();
- if(!user)return;
- const {error}=await db.from("funcionarios").select("id").limit(1);
- if(error){
-  await db.auth.signOut();
-  mensagem("mensagem","Acesso não autorizado ou configuração de segurança pendente.");
-  return;
- }
- document.getElementById("login").classList.add("hidden");
- document.getElementById("painel").classList.remove("hidden");
- mensagem("usuarioLogado","Administrador: "+user.email);
- await carregarDados();
-}
 
+// SAIR
 async function sair(){
  await db.auth.signOut();
  location.reload();
 }
 
+// CARREGAR DADOS
 async function carregarDados(){
  const f=await db.from("funcionarios").select("*").order("nome");
  const e=await db.from("eventos").select("*").order("data_evento");
- if(f.error||e.error){alert("Erro ao carregar dados. Confira as permissões do banco.");return;}
+
+ if(f.error) throw f.error;
+ if(e.error) throw e.error;
+
  funcionarios=f.data||[];
  eventos=e.data||[];
+
  const select=document.getElementById("eventoSelecionado");
  select.innerHTML='<option value="">Selecione um evento</option>';
+
  eventos.forEach(ev=>{
   const op=document.createElement("option");
   op.value=ev.id;
   op.textContent=ev.nome+(ev.data_evento?" - "+ev.data_evento:"");
   select.appendChild(op);
  });
+
  mostrarFuncionarios();
  await carregarConvocacoes();
 }
 
+// CADASTRAR FUNCIONÁRIO
 async function cadastrarFuncionario(){
  const nome=document.getElementById("nome").value.trim();
  const cpf=document.getElementById("cpf").value.replace(/\D/g,"");
  const whatsapp=document.getElementById("whatsapp").value.replace(/\D/g,"");
- if(!nome||cpf.length!==11||!whatsapp){alert("Preencha nome, CPF com 11 números e WhatsApp.");return;}
+
+ if(!nome||cpf.length!==11||!whatsapp){
+  alert("Preencha nome, CPF com 11 números e WhatsApp.");
+  return;
+ }
+
  const {error}=await db.from("funcionarios").insert({nome,cpf,whatsapp});
- if(error){mensagem("msgFuncionario","Erro: "+error.message);return;}
+
+ if(error){
+  mensagem("msgFuncionario","Erro: "+error.message);
+  return;
+ }
+
  document.getElementById("nome").value="";
  document.getElementById("cpf").value="";
  document.getElementById("whatsapp").value="";
+
  mensagem("msgFuncionario","Funcionário cadastrado com sucesso!");
  await carregarDados();
 }
 
+// CADASTRAR EVENTO
 async function cadastrarEvento(){
  const nome=document.getElementById("eventoNome").value.trim();
  const data_evento=document.getElementById("eventoData").value||null;
- if(!nome){alert("Informe o nome do evento.");return;}
+
+ if(!nome){
+  alert("Informe o nome do evento.");
+  return;
+ }
+
  const {error}=await db.from("eventos").insert({nome,data_evento});
- if(error){mensagem("msgEvento","Erro: "+error.message);return;}
+
+ if(error){
+  mensagem("msgEvento","Erro: "+error.message);
+  return;
+ }
+
  document.getElementById("eventoNome").value="";
  document.getElementById("eventoData").value="";
+
  mensagem("msgEvento","Evento cadastrado!");
  await carregarDados();
 }
 
+// CARREGAR CONVOCAÇÕES
 async function carregarConvocacoes(){
  const eventoId=document.getElementById("eventoSelecionado").value;
  convocacoes=[];
+
  if(eventoId){
   const {data,error}=await db.from("convocacoes").select("*").eq("evento_id",eventoId);
-  if(error){alert("Erro ao carregar convocações.");return;}
+
+  if(error){
+   alert("Erro ao carregar convocações: "+error.message);
+   return;
+  }
+
   convocacoes=data||[];
  }
+
  mostrarFuncionarios();
 }
 
+// ALTERAR STATUS
 async function mudarStatus(funcionarioId,status){
  const eventoId=document.getElementById("eventoSelecionado").value;
- if(!eventoId){alert("Selecione primeiro um evento.");return;}
+
+ if(!eventoId){
+  alert("Selecione primeiro um evento.");
+  return;
+ }
+
  const {error}=await db.from("convocacoes").upsert(
-  {funcionario_id:funcionarioId,evento_id:eventoId,status},
+  {
+   funcionario_id:funcionarioId,
+   evento_id:eventoId,
+   status:status
+  },
   {onConflict:"funcionario_id,evento_id"}
  );
- if(error){alert("Não foi possível atualizar: "+error.message);return;}
+
+ if(error){
+  alert("Não foi possível atualizar: "+error.message);
+  return;
+ }
+
  await carregarConvocacoes();
 }
 
+// MOSTRAR FUNCIONÁRIOS
 function mostrarFuncionarios(){
  const busca=document.getElementById("busca").value.toLowerCase();
  const eventoId=document.getElementById("eventoSelecionado").value;
  const lista=document.getElementById("lista");
+
  lista.innerHTML="";
- const filtrados=funcionarios.filter(f=>f.nome.toLowerCase().includes(busca));
- if(!filtrados.length){lista.textContent="Nenhum funcionário cadastrado.";return;}
+
+ const filtrados=funcionarios.filter(f=>
+  f.nome.toLowerCase().includes(busca)
+ );
+
+ if(!filtrados.length){
+  lista.textContent="Nenhum funcionário cadastrado.";
+  return;
+ }
+
  filtrados.forEach(f=>{
   const c=convocacoes.find(x=>x.funcionario_id===f.id);
   const status=c?c.status:"Não convocado";
+
   const div=document.createElement("div");
   div.className="person";
+
   const nome=document.createElement("strong");
   nome.textContent=f.nome;
+
   const situacao=document.createElement("p");
   situacao.className="status";
   situacao.textContent=status;
+
   const telefone=document.createElement("small");
   telefone.textContent="WhatsApp: "+f.whatsapp;
+
   div.append(nome,telefone,situacao);
+
   if(eventoId){
    const select=document.createElement("select");
+
    ["Convocado","Não convocado","Convocação cancelada"].forEach(s=>{
     const op=document.createElement("option");
-    op.value=s;op.textContent=s;select.appendChild(op);
+    op.value=s;
+    op.textContent=s;
+    select.appendChild(op);
    });
+
    select.value=status;
    select.onchange=()=>mudarStatus(f.id,select.value);
    div.appendChild(select);
+
   }else{
    const aviso=document.createElement("small");
    aviso.textContent="Selecione um evento para alterar a situação.";
    div.appendChild(aviso);
   }
+
   lista.appendChild(div);
  });
 }
 
-db.auth.getSession().then(({data})=>{
- if(data.session) iniciarPainel();
+// VERIFICAR SESSÃO EXISTENTE
+db.auth.getSession().then(({data,error})=>{
+ if(error){
+  mensagem("mensagem","Erro ao verificar sessão: "+error.message);
+  return;
+ }
+
+ if(data.session){
+  iniciarPainel();
+ }
+}).catch(error=>{
+ mensagem("mensagem","Erro de conexão: "+error.message);
 });
+
 </script>
+
 </body>
 </html>
