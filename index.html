@@ -94,7 +94,35 @@ async function entrar(){
  await iniciarPainel();
 }
 
+
 async function iniciarPainel(){
+ try {
+  const {data:{user},error:userError}=await db.auth.getUser();
+
+  if(userError) throw userError;
+
+  if(!user){
+   mensagem("mensagem","Usuário não autenticado.");
+   return;
+  }
+
+  const {error}=await db.from("funcionarios").select("id").limit(1);
+
+  if(error) throw error;
+
+  document.getElementById("login").classList.add("hidden");
+  document.getElementById("painel").classList.remove("hidden");
+
+  mensagem("usuarioLogado","Administrador: "+user.email);
+
+  await carregarDados();
+
+ } catch(error) {
+  console.error("Erro ao abrir painel:",error);
+  mensagem("mensagem","Erro ao abrir painel: "+error.message);
+ }
+}
+ {
  const {data:{user}}=await db.auth.getUser();
  if(!user)return;
  const {error}=await db.from("funcionarios").select("id").limit(1);
