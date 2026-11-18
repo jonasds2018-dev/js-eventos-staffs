@@ -1,0 +1,160 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JS EVENTOS E STAFFS</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#101827;color:#fff;font-family:Arial,sans-serif;padding:18px}
+header{background:#17243a;padding:22px;border-radius:14px;margin-bottom:20px}
+h1{margin:0;color:#38d987;font-size:25px}
+header p{color:#bdc8d8;margin-bottom:0}
+.card{background:#1b2940;padding:18px;border-radius:14px;margin-bottom:16px}
+h2{font-size:18px;margin-top:0}
+input,select,button{width:100%;padding:13px;margin:6px 0;border-radius:8px;border:1px solid #40516a;font-size:15px}
+input,select{background:#101827;color:white}
+button{background:#16a765;color:white;font-weight:bold;border:0;cursor:pointer}
+button.secondary{background:#35445c}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:#263650;padding:14px 5px;text-align:center;border-radius:10px}
+.stat strong{display:block;font-size:23px;color:#38d987}
+.stat span{font-size:12px;color:#c6d1df}
+.person{background:#263650;padding:13px;border-radius:9px;margin-top:9px}
+.person strong{display:block;margin-bottom:5px}
+.person small{color:#c4cede}
+.status{font-weight:bold;color:#38d987}
+.cancelado{color:#ff7777}
+.nao{color:#ffd36a}
+.actions{display:flex;gap:7px;margin-top:8px}
+.actions button{font-size:12px;padding:10px}
+.actions button:last-child{background:#a43c48}
+#lista{margin-top:12px}
+</style>
+</head>
+<body>
+<header>
+<h1>JS EVENTOS E STAFFS</h1>
+<p>Sistema de cadastro e convocação de funcionários</p>
+</header>
+
+<div class="card">
+<h2>Painel de controle</h2>
+<div class="stats">
+<div class="stat"><strong id="total">0</strong><span>Funcionários</span></div>
+<div class="stat"><strong id="convocados">0</strong><span>Convocados</span></div>
+<div class="stat"><strong id="cancelados">0</strong><span>Cancelados</span></div>
+</div>
+</div>
+
+<div class="card">
+<h2>Cadastrar funcionário</h2>
+<input id="nome" placeholder="Nome completo">
+<input id="telefone" placeholder="WhatsApp com DDD">
+<button onclick="cadastrar()">CADASTRAR FUNCIONÁRIO</button>
+</div>
+
+<div class="card">
+<h2>Evento / Jogo</h2>
+<input id="evento" placeholder="Ex.: Paraná Clube x Adversário">
+<input id="data" type="date">
+<button onclick="salvarEvento()">SALVAR EVENTO</button>
+<p id="eventoAtual">Nenhum evento selecionado.</p>
+</div>
+
+<div class="card">
+<h2>Consultar funcionários</h2>
+<input id="busca" placeholder="Digite o nome do funcionário..." oninput="renderizar()">
+<div id="lista"></div>
+</div>
+
+<script>
+let pessoas=JSON.parse(localStorage.getItem("js_pessoas")||"[]");
+let evento=JSON.parse(localStorage.getItem("js_evento")||"null");
+
+function guardar(){
+ localStorage.setItem("js_pessoas",JSON.stringify(pessoas));
+ atualizar();
+ renderizar();
+}
+function cadastrar(){
+ let nome=document.getElementById("nome").value.trim();
+ let telefone=document.getElementById("telefone").value.trim();
+ if(!nome){alert("Digite o nome completo.");return}
+ pessoas.push({id:Date.now(),nome,telefone,status:"Não convocado"});
+ document.getElementById("nome").value="";
+ document.getElementById("telefone").value="";
+ guardar();
+}
+function mudarStatus(id,status){
+ pessoas=pessoas.map(p=>p.id===id?{...p,status}:p);
+ guardar();
+}
+function excluir(id){
+ if(confirm("Deseja excluir este funcionário?")){
+ pessoas=pessoas.filter(p=>p.id!==id);
+ guardar();
+ }
+}
+function salvarEvento(){
+ let nome=document.getElementById("evento").value.trim();
+ let data=document.getElementById("data").value;
+ if(!nome){alert("Informe o nome do evento.");return}
+ evento={nome,data};
+ localStorage.setItem("js_evento",JSON.stringify(evento));
+ mostrarEvento();
+}
+function mostrarEvento(){
+ document.getElementById("eventoAtual").textContent=evento?
+ "Evento: "+evento.nome+(evento.data?" | Data: "+evento.data:""):
+ "Nenhum evento selecionado.";
+ if(evento){
+ document.getElementById("evento").value=evento.nome;
+ document.getElementById("data").value=evento.data||"";
+ }
+}
+function atualizar(){
+ document.getElementById("total").textContent=pessoas.length;
+ document.getElementById("convocados").textContent=pessoas.filter(p=>p.status==="Convocado").length;
+ document.getElementById("cancelados").textContent=pessoas.filter(p=>p.status==="Convocação cancelada").length;
+}
+function renderizar(){
+ let busca=document.getElementById("busca").value.toLowerCase();
+ let filtrados=pessoas.filter(p=>p.nome.toLowerCase().includes(busca));
+ let lista=document.getElementById("lista");
+ lista.innerHTML="";
+ if(!filtrados.length){lista.innerHTML="<p>Nenhum funcionário encontrado.</p>";return}
+ filtrados.forEach(p=>{
+ let classe=p.status==="Convocação cancelada"?"cancelado":p.status==="Não convocado"?"nao":"status";
+ let div=document.createElement("div");
+ div.className="person";
+ let nome=document.createElement("strong");
+ nome.textContent=p.nome;
+ let telefone=document.createElement("small");
+ telefone.textContent=p.telefone||"Sem telefone cadastrado";
+ let situacao=document.createElement("p");
+ situacao.className=classe;
+ situacao.textContent=p.status;
+ let acoes=document.createElement("div");
+ acoes.className="actions";
+ [["Convocado","Convocado"],["Não convocado","Não convocado"],["Cancelar","Convocação cancelada"]].forEach(([label,status])=>{
+ let b=document.createElement("button");
+ b.textContent=label;
+ b.onclick=()=>mudarStatus(p.id,status);
+ acoes.appendChild(b);
+ });
+ let apagar=document.createElement("button");
+ apagar.textContent="Excluir";
+ apagar.onclick=()=>excluir(p.id);
+ acoes.appendChild(apagar);
+ div.append(nome,telefone,situacao,acoes);
+ lista.appendChild(div);
+ });
+}
+atualizar();
+renderizar();
+mostrarEvento();
+</script>
+</body>
+</html>
